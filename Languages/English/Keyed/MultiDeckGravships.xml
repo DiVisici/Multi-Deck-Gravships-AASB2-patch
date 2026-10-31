@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+	<MDG_DeckStowed>{0}: there is no level above this landing site for the upper deck, so it was folded away ({1} objects). Pawns from it were set down on the main deck. It will unfold the next time the ship lands somewhere with levels above.</MDG_DeckStowed>
+	<MDG_DeckDeployed>{0}: the folded upper deck unfolded again ({1} objects).</MDG_DeckDeployed>
+	<MDG_UpperBlockedBy>The upper deck (level +{0}) would hit {1}.</MDG_UpperBlockedBy>
+	<MDG_UpperBlockedTerrain>The upper deck (level +{0}) would hit {1} on the level above.</MDG_UpperBlockedTerrain>
+	<MDG_UpperOutOfBounds>The upper deck (level +{0}) would stick out of the level above.</MDG_UpperOutOfBounds>
+	<MDG_OrbitDecks>Ship roofs carry a deck in orbit</MDG_OrbitDecks>
+	<MDG_OrbitDecksDesc>As above, So below II normally stops roofs over gravship substructure in orbit from making a rooftop on the level above. Turn this on so gravship decks also work in orbit. Existing orbital maps get their ship rooftops back the next time they load.</MDG_OrbitDecksDesc>
+	<MDG_Verbose>Verbose logging</MDG_Verbose>
+	<MDG_VerboseDesc>Writes launch and landing details (upper deck cells, stowing, stair links) to the log. Turn this on when reporting a problem.</MDG_VerboseDesc>
+</LanguageData>

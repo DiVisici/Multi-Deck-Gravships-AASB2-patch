@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+	<name>Multi-Deck Gravships (As above, So below II)</name>
+	<author>DiVisici</author>
+	<packageId>DiVisici.MultiDeckGravships</packageId>
+	<supportedVersions>
+		<li>1.6</li>
+		<li>1.7</li>
+	</supportedVersions>
+	<description>Lets a gravship take its upper decks along when it flies, on colonies built with As above, So below II.
+
+In As above, So below II, roofing a room gives you a walkable rooftop on the level above. On a gravship, vanilla only lifts the substructure level, so everything you built upstairs used to stay behind as a floating platform. With this mod, the upper decks fly with the ship:
+
+- Every cell above the ship's footprint that sits on the ship's roof (or wall tops) is part of the ship, on every level up.
+- Buildings, items, pawns, floors, zones, areas, ceilings and room temperatures on those decks launch and land with the ship. They keep their level and turn with the ship when you rotate it on landing.
+- Stairs, ladders and elevators on the ship stay connected. They are not torn down and rebuilt.
+- Pawns on upper decks count as aboard. Boarding and the "left behind" warnings take them into account.
+- Landing checks the levels above the landing spot too, and refuses spots where an upper deck would hit a mountain top or someone else's rooftop.
+- If you land somewhere with no level above (a quest site, an older map, or the top level), the upper deck is folded away. Pawns on it are set down on the main deck. It unfolds again the next time the ship lands somewhere with enough levels.
+- In orbit, As above, So below II normally stops ship roofs from making a rooftop above. This mod turns that back on for gravship substructure, so decks work in orbit too. You can switch this off in the mod settings.
+
+Works alongside Vanilla Gravship Expanded chapters 1 and 2.
+
+Requires As above, So below II. Not compatible with MultiFloors, which As above, So below II already excludes.</description>
+	<modDependencies>
+		<li>
+			<packageId>brrainz.harmony</packageId>
+			<displayName>Harmony</displayName>
+			<steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+		</li>
+		<li>
+			<packageId>astryl.AsAboveSoBelow2</packageId>
+			<displayName>As above, So below II</displayName>
+			<steamWorkshopUrl>steam://url/CommunityFilePage/3776015553</steamWorkshopUrl>
+		</li>
+	</modDependencies>
+	<loadAfter>
+		<li>brrainz.harmony</li>
+		<li>astryl.AsAboveSoBelow2</li>
+		<li>vanillaexpanded.gravship</li>
+		<li>vanillaexpanded.gravship2</li>
+		<li>btd.remix.gravshipblueprints</li>
+		<li>ferny.AlwaysPositionGravshiponLanding</li>
+	</loadAfter>
+	<incompatibleWith>
+		<li>telardo.MultiFloors</li>
+	</incompatibleWith>
+</ModMetaData>
