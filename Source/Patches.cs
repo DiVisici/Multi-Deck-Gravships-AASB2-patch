@@ -83,6 +83,9 @@ namespace MultiDeckGravships
 			Patch(AccessTools.Method(typeof(Building_ABStairs2), "SpawnSetup"), pre: nameof(StairsPatches.SpawnSetup_Prefix), fin: nameof(StairsPatches.SpawnSetup_Finalizer));
 			Patch(AccessTools.Method(typeof(Building_ABStairs2), "DeSpawn"), pre: nameof(StairsPatches.DeSpawn_Prefix), fin: nameof(StairsPatches.DeSpawn_Finalizer));
 
+			// Ship parts that need substructure (hull, thrusters, tanks...) can be built on the upper decks.
+			Patch(AccessTools.Method(typeof(GridsUtility), "GetAffordances", new[] { typeof(IntVec3), typeof(Map) }), post: nameof(AffordancePatches.GetAffordances_Postfix));
+
 			// Orbit: ship roofs hold a deck above them.
 			Type orbit = AccessTools.TypeByName("AsAboveSoBelow.ABOrbitRules");
 			Patch(AccessTools.Method(orbit, "ProjectsUpperLevel"), post: nameof(OrbitPatches.ProjectsUpperLevel_Postfix));
@@ -129,7 +132,7 @@ namespace MultiDeckGravships
 			{
 				return null;
 			}
-			foreach (Type t in new[] { typeof(EnginePatches), typeof(LaunchPatches), typeof(PlacePatches), typeof(DesignatorPatches), typeof(StairsPatches), typeof(OrbitPatches) })
+			foreach (Type t in new[] { typeof(EnginePatches), typeof(LaunchPatches), typeof(PlacePatches), typeof(DesignatorPatches), typeof(StairsPatches), typeof(OrbitPatches), typeof(AffordancePatches) })
 			{
 				MethodInfo m = AccessTools.Method(t, name);
 				if (m != null)
@@ -408,6 +411,44 @@ namespace MultiDeckGravships
 				Deck.SetStaticBool(Deck.F_collapsingShaft, false);
 			}
 			return __exception;
+		}
+	}
+
+	/// <summary>
+	/// Vanilla only lets ship parts stand on cells whose foundation is substructure. An upper
+	/// deck has no foundation, just AASB2's rooftop (or a floor laid on it), so on cells the
+	/// ship holds up the affordance list gains Substructure.
+	/// </summary>
+	public static class AffordancePatches
+	{
+		private static TerrainAffordanceDef substructure;
+
+		private static readonly Dictionary<List<TerrainAffordanceDef>, List<TerrainAffordanceDef>> withSubstructure = new Dictionary<List<TerrainAffordanceDef>, List<TerrainAffordanceDef>>();
+
+		public static void GetAffordances_Postfix(IntVec3 c, Map map, ref List<TerrainAffordanceDef> __result)
+		{
+			if (__result == null || map == null || !Deck.Ready)
+			{
+				return;
+			}
+			if (substructure == null)
+			{
+				substructure = DefDatabase<TerrainAffordanceDef>.GetNamedSilentFail("Substructure");
+				if (substructure == null)
+				{
+					return;
+				}
+			}
+			if (!Deck.IsShipDeckCell(map, c) || __result.Contains(substructure))
+			{
+				return;
+			}
+			if (!withSubstructure.TryGetValue(__result, out List<TerrainAffordanceDef> list))
+			{
+				list = new List<TerrainAffordanceDef>(__result) { substructure };
+				withSubstructure[__result] = list;
+			}
+			__result = list;
 		}
 	}
 

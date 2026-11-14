@@ -152,6 +152,43 @@ namespace MultiDeckGravships
 			return t != null && (t == ABDefOf.AB_OpenAir || IsDeckBase(t));
 		}
 
+		/// <summary>
+		/// A rooftop or wall top that a gravship holds up: walking straight down through the
+		/// levels below, every cell is ship deck until one stands on substructure.
+		/// </summary>
+		public static bool IsShipDeckCell(Map map, IntVec3 c)
+		{
+			if (!c.InBounds(map) || !IsDeckBase(BaseLayer(map, c)))
+			{
+				return false;
+			}
+			ABBandMap bands = Bands(map);
+			if (bands == null)
+			{
+				return false;
+			}
+			IntVec3 cur = c;
+			for (int band = bands.BandOf(c) - 1; band >= 0; band--)
+			{
+				IntVec3 below = bands.Translate(cur, band);
+				if (!below.InBounds(map) || bands.InGutter(below))
+				{
+					return false;
+				}
+				TerrainDef f = map.terrainGrid.FoundationAt(below);
+				if (f != null && f.IsSubstructure)
+				{
+					return true;
+				}
+				if (!IsDeckBase(BaseLayer(map, below)))
+				{
+					return false;
+				}
+				cur = below;
+			}
+			return false;
+		}
+
 		public static bool IsShipStructure(Map map, IntVec3 c)
 		{
 			TerrainDef f = map.terrainGrid.FoundationAt(c);
