@@ -298,6 +298,45 @@ namespace MultiDeckGravships
 			return cache.cells;
 		}
 
+		private sealed class ShipCellsCache
+		{
+			public int upperTick = int.MinValue;
+
+			public int lowerCount = -1;
+
+			public int upperCount = -1;
+
+			public readonly HashSet<IntVec3> cells = new HashSet<IntVec3>();
+		}
+
+		private static readonly ConditionalWeakTable<Building_GravEngine, ShipCellsCache> shipCellsCaches = new ConditionalWeakTable<Building_GravEngine, ShipCellsCache>();
+
+		/// <summary>
+		/// The main deck plus every upper deck. Replaces engine.ValidSubstructure in checks that
+		/// read it directly to ask whether a pawn is on the ship (the launch ritual, boarding).
+		/// </summary>
+		public static HashSet<IntVec3> ShipCells(Building_GravEngine engine)
+		{
+			HashSet<IntVec3> lower = engine.ValidSubstructure;
+			HashSet<IntVec3> upper = UpperCells(engine);
+			if (upper.Count == 0)
+			{
+				return lower;
+			}
+			ShipCellsCache cache = shipCellsCaches.GetValue(engine, _ => new ShipCellsCache());
+			int upperTick = upperCaches.TryGetValue(engine, out UpperCache uc) ? uc.tick : 0;
+			if (cache.upperTick != upperTick || cache.lowerCount != lower.Count || cache.upperCount != upper.Count)
+			{
+				cache.cells.Clear();
+				cache.cells.UnionWith(lower);
+				cache.cells.UnionWith(upper);
+				cache.upperTick = upperTick;
+				cache.lowerCount = lower.Count;
+				cache.upperCount = upper.Count;
+			}
+			return cache.cells;
+		}
+
 		public static bool IsUpperCell(Building_GravEngine engine, IntVec3 c)
 		{
 			if (!Ready || engine == null)
@@ -404,6 +443,7 @@ namespace MultiDeckGravships
 			Dictionary<IntVec3, int> upper = ComputeUpper(map, shipBand, lower);
 			if (upper.Count == 0)
 			{
+				MDGLog.Message("launch: no upper deck above " + engine.RenamableLabel + " (" + lower.Count + " main deck cells).");
 				return;
 			}
 			LaunchCtx L = new LaunchCtx
@@ -494,7 +534,13 @@ namespace MultiDeckGravships
 					RekeyDict(vac, conv, dropNull: false);
 				}
 			}
-			MDGLog.Dev("captured " + moved + " upper deck object(s); ship bounds " + g.Bounds);
+			List<KeyValuePair<Thing, PositionData>> upperThings = G_things(g).Where(kv => kv.Value != null && kv.Value.position.y != 0).ToList();
+			int big = upperThings.Count(kv => kv.Key.def.size != IntVec2.One);
+			MDGLog.Message("launch: " + L.upper.Count + " upper deck cells, " + upperThings.Count + " upper deck objects captured (" + big + " larger than one cell), " + G_pawns(g).Values.Count(pd => pd != null && pd.position.y != 0) + " pawns upstairs.");
+			foreach (KeyValuePair<Thing, PositionData> kv in upperThings.Where(kv => kv.Key.def.size != IntVec2.One))
+			{
+				MDGLog.Dev("  upper " + kv.Key.def.defName + " " + kv.Key.def.size + " at " + kv.Key.Position + " -> offset " + kv.Value.position);
+			}
 		}
 
 		private static IntVec3 ToDeckOffset(LaunchCtx L, IntVec3 origin, IntVec3 o)
@@ -827,7 +873,7 @@ namespace MultiDeckGravships
 			Stow(g, P);
 			ResetPlacementCaches(g);
 			PrepareUpperCells(g, P);
-			MDGLog.Dev("landing " + g.Label + " at " + root + ((bands != null) ? (" (band " + P.shipBand + " of " + bands.bandCount + ")") : " (map has no levels)") + ": " + P.upperCells.Count + " upper deck cell(s), " + P.deployed + " unfolded, " + P.stowed + " folded away, " + P.lowered.Count + " pawn(s) set down.");
+			MDGLog.Message("landing " + g.Label + " at " + root + ((bands != null) ? (" (band " + P.shipBand + " of " + bands.bandCount + ")") : " (map has no levels)") + ": " + P.upperCells.Count + " upper deck cell(s), " + P.deployed + " unfolded, " + P.stowed + " folded away, " + P.lowered.Count + " pawn(s) set down.");
 		}
 
 		private static void ResetPlacementCaches(Gravship g)
@@ -1054,6 +1100,7 @@ namespace MultiDeckGravships
 			try
 			{
 				RelinkStairs(P);
+				VerifyUpperPlacement(g, P);
 				foreach (Pawn p in P.lowered)
 				{
 					ReseatPawn(p);
@@ -1136,6 +1183,39 @@ namespace MultiDeckGravships
 				ResumeSync(P, reconcile: false);
 			}
 			place = null;
+		}
+
+		/// <summary>After landing, count upper-deck things that did not end up on their own level.</summary>
+		private static void VerifyUpperPlacement(Gravship g, PlaceCtx P)
+		{
+			if (P.bands == null)
+			{
+				return;
+			}
+			int ok = 0;
+			int wrong = 0;
+			foreach (KeyValuePair<Thing, PositionData> kv in G_things(g))
+			{
+				Thing t = kv.Key;
+				PositionData pd = kv.Value;
+				if (pd == null || pd.position.y == 0 || !P.Fits(pd.position.y) || t == null || !t.Spawned || t.Map != P.map)
+				{
+					continue;
+				}
+				int want = P.shipBand + pd.position.y;
+				int got = P.bands.BandOf(t.Position);
+				if (got == want)
+				{
+					ok++;
+					continue;
+				}
+				wrong++;
+				if (wrong <= 10)
+				{
+					MDGLog.Warning("upper-deck " + t.def.defName + " " + t.def.size + " ended on level " + (got - P.bands.surfaceBand) + " at " + t.Position + " instead of level " + (want - P.bands.surfaceBand) + ". Please report this with the log.");
+				}
+			}
+			MDGLog.Message("landing check: " + ok + " upper-deck object(s) on their level" + ((wrong > 0) ? (", " + wrong + " NOT") : "") + ".");
 		}
 
 		private static void RelinkStairs(PlaceCtx P)

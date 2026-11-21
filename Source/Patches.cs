@@ -42,6 +42,9 @@ namespace MultiDeckGravships
 			Patch(AccessTools.Method(engine, "ValidSubstructureAt"), post: nameof(EnginePatches.ValidSubstructureAt_Postfix));
 			Patch(AccessTools.Method(engine, "OnValidSubstructure"), post: nameof(EnginePatches.OnValidSubstructure_Postfix));
 			Patch(AccessTools.Method(gu, "IsOnboardGravship_NewTemp"), post: nameof(EnginePatches.IsOnboardGravship_Postfix));
+			// The launch ritual waits until spectators and boarders stand on the ship; boarding checks the same.
+			Patch(AccessTools.Method(typeof(StageEndTrigger_RoleArrivedAndSpectatorsOnSubstructure), "ArrivedCheck"), trans: nameof(EnginePatches.ShipCells_Transpiler));
+			Patch(AccessTools.Method(typeof(JobDriver_BoardOrLeaveGravship), "CheckFailedToBoardOrLeave"), trans: nameof(EnginePatches.ShipCells_Transpiler));
 
 			// Launch: capture the upper decks with the ship.
 			Patch(AccessTools.Constructor(typeof(Gravship), new[] { engine }), post: nameof(LaunchPatches.Ctor_Postfix), trans: nameof(LaunchPatches.FirstValidSubstructure_Transpiler));
@@ -83,8 +86,36 @@ namespace MultiDeckGravships
 			Patch(AccessTools.Method(typeof(Building_ABStairs2), "SpawnSetup"), pre: nameof(StairsPatches.SpawnSetup_Prefix), fin: nameof(StairsPatches.SpawnSetup_Finalizer));
 			Patch(AccessTools.Method(typeof(Building_ABStairs2), "DeSpawn"), pre: nameof(StairsPatches.DeSpawn_Prefix), fin: nameof(StairsPatches.DeSpawn_Finalizer));
 
+			// 1.7's rotation of placement data drops the level of multi-cell things; put it back.
+			Patch(AccessTools.PropertyGetter(typeof(Gravship), "ThingPlacements"), post: nameof(PlacePatches.Placements_Postfix));
+			Patch(AccessTools.PropertyGetter(typeof(Gravship), "ThrusterPlacements"), post: nameof(PlacePatches.ThrusterPlacements_Postfix));
+
+			// Landing: an upper-deck building must find deck floor under its whole footprint before
+			// AASB2's floating-object guard looks, or the guard drops it to the main deck.
+			Patch(AccessTools.Method(typeof(GenSpawn), "Spawn", new[] { typeof(Thing), typeof(IntVec3), typeof(Map), typeof(Rot4), typeof(WipeMode), typeof(bool), typeof(bool) }), pre: nameof(PlacePatches.GenSpawn_Prefix), prePriority: Priority.First);
+			Patch(AccessTools.Method(typeof(GenSpawn), "Spawn", new[] { typeof(Thing), typeof(IntVec3), typeof(Map), typeof(Rot4), typeof(WipeMode), typeof(bool), typeof(bool) }), pre: nameof(PlacePatches.GenSpawn_LastPrefix), prePriority: Priority.Last);
+
 			// Ship parts that need substructure (hull, thrusters, tanks...) can be built on the upper decks.
 			Patch(AccessTools.Method(typeof(GridsUtility), "GetAffordances", new[] { typeof(IntVec3), typeof(Map) }), post: nameof(AffordancePatches.GetAffordances_Postfix));
+
+			// TD Enhancement Pack's "buildable" overlay reads terrain affordances directly; make it agree.
+			Type tdExtra = AccessTools.TypeByName("TD_Enhancement_Pack.Overlays.SpecialAffordanceExtra");
+			if (tdExtra != null)
+			{
+				TDOverlayPatches.CurAffordance = AccessTools.Field(tdExtra, "curAffordance");
+				if (TDOverlayPatches.CurAffordance != null)
+				{
+					Patch(AccessTools.Method(tdExtra, "ShowCell", new[] { typeof(int) }), post: nameof(TDOverlayPatches.ShowCell_Postfix));
+				}
+			}
+
+			// Follow Me: keep following a pawn when it takes the stairs to another level.
+			Type followMe = AccessTools.TypeByName("FollowMe.FollowMe");
+			if (followMe != null)
+			{
+				FollowMePatches.HasJumped = AccessTools.Field(followMe, "_cameraHasJumpedAtLeastOnce");
+				Patch(AccessTools.Method(followMe, "TryJumpSmoothInternal", new[] { typeof(Thing) }), pre: nameof(FollowMePatches.TryJumpSmoothInternal_Prefix));
+			}
 
 			// Orbit: ship roofs hold a deck above them.
 			Type orbit = AccessTools.TypeByName("AsAboveSoBelow.ABOrbitRules");
@@ -102,7 +133,7 @@ namespace MultiDeckGravships
 			}
 		}
 
-		private static void Patch(MethodBase target, string pre = null, string post = null, string trans = null, string fin = null, int postPriority = -1)
+		private static void Patch(MethodBase target, string pre = null, string post = null, string trans = null, string fin = null, int postPriority = -1, int prePriority = -1)
 		{
 			if (target == null)
 			{
@@ -112,7 +143,7 @@ namespace MultiDeckGravships
 			}
 			try
 			{
-				MethodInfo replacement = harmony.Patch(target, Hm(pre), Hm(post, postPriority), Hm(trans), Hm(fin));
+				MethodInfo replacement = harmony.Patch(target, Hm(pre, prePriority), Hm(post, postPriority), Hm(trans), Hm(fin));
 				if (replacement != null)
 				{
 					Replacements.Add(replacement);
@@ -132,7 +163,7 @@ namespace MultiDeckGravships
 			{
 				return null;
 			}
-			foreach (Type t in new[] { typeof(EnginePatches), typeof(LaunchPatches), typeof(PlacePatches), typeof(DesignatorPatches), typeof(StairsPatches), typeof(OrbitPatches), typeof(AffordancePatches) })
+			foreach (Type t in new[] { typeof(EnginePatches), typeof(LaunchPatches), typeof(PlacePatches), typeof(DesignatorPatches), typeof(StairsPatches), typeof(OrbitPatches), typeof(AffordancePatches), typeof(TDOverlayPatches), typeof(FollowMePatches) })
 			{
 				MethodInfo m = AccessTools.Method(t, name);
 				if (m != null)
@@ -151,6 +182,30 @@ namespace MultiDeckGravships
 
 	public static class EnginePatches
 	{
+		private static readonly MethodInfo GetValidSubstructure = AccessTools.PropertyGetter(typeof(Building_GravEngine), "ValidSubstructure");
+
+		private static readonly MethodInfo ShipCells = AccessTools.Method(typeof(Deck), nameof(Deck.ShipCells));
+
+		/// <summary>engine.ValidSubstructure -> Deck.ShipCells(engine): main deck plus upper decks.</summary>
+		public static IEnumerable<CodeInstruction> ShipCells_Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
+		{
+			int n = 0;
+			foreach (CodeInstruction ci in instructions)
+			{
+				if (ci.Calls(GetValidSubstructure))
+				{
+					ci.opcode = OpCodes.Call;
+					ci.operand = ShipCells;
+					n++;
+				}
+				yield return ci;
+			}
+			if (n == 0)
+			{
+				MDGLog.Warning("found no ValidSubstructure read in " + __originalMethod.FullDescription() + "; pawns on upper decks may not count as aboard there.");
+			}
+		}
+
 		public static void ValidSubstructureAt_Postfix(Building_GravEngine __instance, IntVec3 cell, ref bool __result)
 		{
 			if (!__result && Deck.IsUpperCell(__instance, cell))
@@ -286,6 +341,180 @@ namespace MultiDeckGravships
 			{
 				MDGLog.Warning("found no cell offsets in " + __originalMethod.FullDescription() + "; its upper-deck parts will land on the main deck.");
 			}
+		}
+
+		private static int deckFootprintFixes;
+
+		/// <summary>
+		/// Runs ahead of AASB2's floating-object guard. While a ship with upper decks is being set
+		/// down, a building headed for an upper level gets deck floor under every cell of its
+		/// footprint. Otherwise one open-air cell is enough for AASB2 to drop it to the surface
+		/// level, where it wipes whatever stands there.
+		/// </summary>
+		/// <summary>
+		/// Gravship.GetPlacementValues rotates each stored offset into a placement offset. For
+		/// things larger than one cell, 1.7 returns it without the level (y), so an upper-deck
+		/// building would land on the main deck. Restore y from the stored offset. The result is
+		/// cached by the game per rotation; this only fills in what is missing, so it is idempotent.
+		/// </summary>
+		public static void Placements_Postfix(Gravship __instance, Dictionary<Thing, PositionData.Data> __result)
+		{
+			RestoreLevels(__instance, __result, Deck.G_things);
+		}
+
+		public static void ThrusterPlacements_Postfix(Gravship __instance, Dictionary<Thing, PositionData.Data> __result)
+		{
+			RestoreLevels(__instance, __result, Deck.G_thrusters);
+		}
+
+		private static readonly List<Thing> tmpRelevel = new List<Thing>();
+
+		private static void RestoreLevels(Gravship g, Dictionary<Thing, PositionData.Data> placements, AccessTools.FieldRef<Gravship, Dictionary<Thing, PositionData>> source)
+		{
+			if (!Deck.Ready || g == null || placements == null || placements.Count == 0)
+			{
+				return;
+			}
+			try
+			{
+				Dictionary<Thing, PositionData> stored = source(g);
+				if (stored == null)
+				{
+					return;
+				}
+				tmpRelevel.Clear();
+				foreach (KeyValuePair<Thing, PositionData.Data> kv in placements)
+				{
+					if (kv.Value.local.y == 0 && stored.TryGetValue(kv.Key, out PositionData pd) && pd != null && pd.position.y != 0)
+					{
+						tmpRelevel.Add(kv.Key);
+					}
+				}
+				foreach (Thing t in tmpRelevel)
+				{
+					PositionData.Data d = placements[t];
+					d.local = new IntVec3(d.local.x, stored[t].position.y, d.local.z);
+					placements[t] = d;
+				}
+				if (tmpRelevel.Count > 0)
+				{
+					MDGLog.Dev("restored the level of " + tmpRelevel.Count + " multi-cell upper-deck placement(s) after rotation.");
+				}
+				tmpRelevel.Clear();
+			}
+			catch (Exception e)
+			{
+				Log.ErrorOnce(MDGLog.Prefix + "restoring upper-deck placement levels failed: " + e, 0x4D44_4705);
+			}
+		}
+
+		private static int spawnCorrections;
+
+		public static void GenSpawn_Prefix(Thing newThing, ref IntVec3 loc, Map map, Rot4 rot, bool respawningAfterLoad)
+		{
+			if (respawningAfterLoad || !GravshipPlacementUtility.placingGravship || newThing?.def == null)
+			{
+				return;
+			}
+			Deck.PlaceCtx P = Deck.place;
+			if (P == null || P.map != map || P.bands == null)
+			{
+				return;
+			}
+			// Ask the ship itself where this thing belongs, whatever cell the caller worked out.
+			try
+			{
+				if (Deck.G_things(P.gravship).TryGetValue(newThing, out PositionData pd) && pd != null && pd.position.y != 0 && P.Fits(pd.position.y)
+					&& P.gravship.ThingPlacements.TryGetValue(newThing, out PositionData.Data data))
+				{
+					IntVec3 intended = data.local.y != 0 ? Deck.Add(P.root, data.local) : P.bands.Translate(new IntVec3(P.root.x + data.local.x, 0, P.root.z + data.local.z), P.shipBand + pd.position.y);
+					if (intended.InBounds(map) && loc != intended)
+					{
+						spawnCorrections++;
+						string msg = "corrected the landing cell of upper-deck " + newThing.def.defName + " " + newThing.def.size + ": asked for " + loc + ", belongs at " + intended + " (stored offset " + pd.position + ", placement offset " + data.local + ").";
+						if (spawnCorrections <= 3)
+						{
+							MDGLog.Warning(msg + " Please report this with the log.");
+						}
+						else
+						{
+							MDGLog.Dev(msg);
+						}
+						loc = intended;
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Log.ErrorOnce(MDGLog.Prefix + "checking an upper-deck landing cell failed: " + e, 0x4D44_4704);
+			}
+			if (!loc.InBounds(map) || P.bands.BandOf(loc) <= P.shipBand)
+			{
+				return;
+			}
+			try
+			{
+				TerrainDef air = AsAboveSoBelow.ABDefOf.AB_OpenAir;
+				int fixedHere = 0;
+				foreach (IntVec3 c in GenAdj.OccupiedRect(loc, rot, newThing.def.Size))
+				{
+					if (c.InBounds(map) && !P.bands.InGutter(c) && map.terrainGrid.TerrainAt(c) == air)
+					{
+						map.terrainGrid.SetTerrain(c, AsAboveSoBelow.ABDefOf.AB_RoofSurface);
+						map.fogGrid.Unfog(c);
+						P.upperCells.Add(c);
+						fixedHere++;
+					}
+				}
+				pendingThing = newThing;
+				pendingLoc = loc;
+				if (fixedHere > 0)
+				{
+					deckFootprintFixes++;
+					string what = newThing.def.defName + " at " + loc + " (" + fixedHere + " of its cells were open air)";
+					if (deckFootprintFixes <= 3)
+					{
+						MDGLog.Warning("laid deck floor under an upper-deck building so it stays on its level: " + what + ". Please report this with the log.");
+					}
+					else
+					{
+						MDGLog.Dev("laid deck floor under " + what);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Log.ErrorOnce(MDGLog.Prefix + "checking an upper-deck footprint failed: " + e, 0x4D44_4703);
+			}
+		}
+
+		private static Thing pendingThing;
+
+		private static IntVec3 pendingLoc;
+
+		/// <summary>
+		/// Runs after every other GenSpawn prefix. If one of them moved an upper-deck building
+		/// off its level during landing (AASB2's floating guard, or another mod), put it back.
+		/// </summary>
+		public static void GenSpawn_LastPrefix(Thing newThing, ref IntVec3 loc)
+		{
+			Thing expected = pendingThing;
+			if (expected == null)
+			{
+				return;
+			}
+			pendingThing = null;
+			if (expected != newThing || loc == pendingLoc)
+			{
+				return;
+			}
+			Deck.PlaceCtx P = Deck.place;
+			if (P?.bands != null && loc.InBounds(P.map) && P.bands.BandOf(loc) == P.bands.BandOf(pendingLoc))
+			{
+				return;
+			}
+			MDGLog.Warning("another mod moved " + newThing.def.defName + " from its upper-deck cell " + pendingLoc + " to " + loc + " during landing; keeping it on its deck.");
+			loc = pendingLoc;
 		}
 
 		public static void Place_Prefix(Gravship gravship, IntVec3 root, Map map)
@@ -449,6 +678,84 @@ namespace MultiDeckGravships
 				withSubstructure[__result] = list;
 			}
 			__result = list;
+		}
+	}
+
+	/// <summary>
+	/// TD Enhancement Pack shades cells red while placing a building whose special affordance
+	/// (Substructure here) the cell's top terrain lacks. Ask the game instead, which also
+	/// knows about foundations and, with this mod, gravship decks.
+	/// </summary>
+	public static class TDOverlayPatches
+	{
+		internal static FieldInfo CurAffordance;
+
+		public static void ShowCell_Postfix(object __instance, int __0, ref bool __result)
+		{
+			if (!__result || !Deck.Ready)
+			{
+				return;
+			}
+			Map map = Find.CurrentMap;
+			if (map == null || __0 < 0 || __0 >= map.cellIndices.NumGridCells)
+			{
+				return;
+			}
+			if (!(CurAffordance.GetValue(__instance) is TerrainAffordanceDef needed))
+			{
+				return;
+			}
+			List<TerrainAffordanceDef> have = map.cellIndices.IndexToCell(__0).GetAffordances(map);
+			if (have != null && have.Contains(needed))
+			{
+				__result = false;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Follow Me moves the camera to the followed pawn every frame, and stops following when
+	/// the camera lands far from where it put it. AASB2 keeps the camera on the level being
+	/// viewed, so a pawn taking the stairs made the camera snap back and Follow Me give up.
+	/// Switch the viewed level to the pawn's level first, and tell Follow Me the jump was ours.
+	/// </summary>
+	public static class FollowMePatches
+	{
+		internal static FieldInfo HasJumped;
+
+		public static void TryJumpSmoothInternal_Prefix(Thing thing)
+		{
+			try
+			{
+				if (thing == null || !Deck.Ready)
+				{
+					return;
+				}
+				Map map = thing.MapHeld;
+				if (map == null || map != Find.CurrentMap)
+				{
+					return;
+				}
+				ABBandMap bands = Deck.Bands(map);
+				IntVec3 pos = thing.PositionHeld;
+				if (bands == null || !pos.InBounds(map) || bands.InGutter(pos))
+				{
+					return;
+				}
+				int band = bands.BandOf(pos);
+				if (band == ABBandView.CurrentBand(map) || !bands.IsOpen(band))
+				{
+					return;
+				}
+				if (ABBandView.SetBand(map, band, preserveXZ: true))
+				{
+					HasJumped?.SetValue(null, false);
+				}
+			}
+			catch (Exception e)
+			{
+				Log.ErrorOnce(MDGLog.Prefix + "following a pawn to another level failed: " + e, 0x4D44_4702);
+			}
 		}
 	}
 

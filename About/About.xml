@@ -14,12 +14,13 @@ In As above, So below II, roofing a room gives you a walkable rooftop on the lev
 - Every cell above the ship's footprint that sits on the ship's roof (or wall tops) is part of the ship, on every level up.
 - Buildings, items, pawns, floors, zones, areas, ceilings and room temperatures on those decks launch and land with the ship. They keep their level and turn with the ship when you rotate it on landing.
 - Stairs, ladders and elevators on the ship stay connected. They are not torn down and rebuilt.
-- Pawns on upper decks count as aboard. Boarding and the "left behind" warnings take them into account.
+- Pawns on upper decks count as aboard. Boarding, the "left behind" warnings and the launch ritual take them into account.
+- Ship parts that need substructure (hull, thrusters, fuel tanks, consoles and so on) can be built on the upper decks.
 - Landing checks the levels above the landing spot too, and refuses spots where an upper deck would hit a mountain top or someone else's rooftop.
 - If you land somewhere with no level above (a quest site, an older map, or the top level), the upper deck is folded away. Pawns on it are set down on the main deck. It unfolds again the next time the ship lands somewhere with enough levels.
 - In orbit, As above, So below II normally stops ship roofs from making a rooftop above. This mod turns that back on for gravship substructure, so decks work in orbit too. You can switch this off in the mod settings.
 
-Works alongside Vanilla Gravship Expanded chapters 1 and 2.
+Works alongside Vanilla Gravship Expanded chapters 1 and 2. With TD Enhancement Pack, its buildable overlay no longer marks ship decks red when placing ship parts. With Follow Me, the camera keeps following a pawn when it takes the stairs to another level.
 
 Requires As above, So below II. Not compatible with MultiFloors, which As above, So below II already excludes.</description>
 	<modDependencies>
