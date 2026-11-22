@@ -1101,6 +1101,11 @@ namespace MultiDeckGravships
 			{
 				RelinkStairs(P);
 				VerifyUpperPlacement(g, P);
+				int homed = ExtendHomeToDecks(P.map, P.bands, P.shipBand, P.upperCells);
+				if (homed > 0)
+				{
+					MDGLog.Dev("added " + homed + " upper deck cell(s) to the home area.");
+				}
 				foreach (Pawn p in P.lowered)
 				{
 					ReseatPawn(p);
@@ -1186,6 +1191,34 @@ namespace MultiDeckGravships
 		}
 
 		/// <summary>After landing, count upper-deck things that did not end up on their own level.</summary>
+		/// <summary>
+		/// Upper-deck cells join the home area wherever the main-deck cell under them is home, so
+		/// colonists restricted to Home still fetch food and work upstairs. Only adds, never removes.
+		/// </summary>
+		public static int ExtendHomeToDecks(Map map, ABBandMap bands, int shipBand, IEnumerable<IntVec3> upperCells)
+		{
+			if (MDGMod.Settings == null || !MDGMod.Settings.homeOnDecks || map?.areaManager?.Home == null || bands == null || upperCells == null)
+			{
+				return 0;
+			}
+			Area_Home home = map.areaManager.Home;
+			int added = 0;
+			foreach (IntVec3 c in upperCells)
+			{
+				if (!c.InBounds(map) || home[c])
+				{
+					continue;
+				}
+				IntVec3 below = bands.Translate(c, shipBand);
+				if (below.InBounds(map) && home[below])
+				{
+					home[c] = true;
+					added++;
+				}
+			}
+			return added;
+		}
+
 		private static void VerifyUpperPlacement(Gravship g, PlaceCtx P)
 		{
 			if (P.bands == null)

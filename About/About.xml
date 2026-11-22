@@ -15,6 +15,7 @@ In As above, So below II, roofing a room gives you a walkable rooftop on the lev
 - Buildings, items, pawns, floors, zones, areas, ceilings and room temperatures on those decks launch and land with the ship. They keep their level and turn with the ship when you rotate it on landing.
 - Stairs, ladders and elevators on the ship stay connected. They are not torn down and rebuilt.
 - Pawns on upper decks count as aboard. Boarding, the "left behind" warnings and the launch ritual take them into account.
+- Upper decks join the home area wherever the main deck below is home, so colonists restricted to Home still fetch food and work upstairs. You can switch this off in the mod settings.
 - Ship parts that need substructure (hull, thrusters, fuel tanks, consoles and so on) can be built on the upper decks.
 - Landing checks the levels above the landing spot too, and refuses spots where an upper deck would hit a mountain top or someone else's rooftop.
 - If you land somewhere with no level above (a quest site, an older map, or the top level), the upper deck is folded away. Pawns on it are set down on the main deck. It unfolds again the next time the ship lands somewhere with enough levels.

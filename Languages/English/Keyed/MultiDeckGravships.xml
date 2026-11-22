@@ -7,6 +7,8 @@
 	<MDG_UpperOutOfBounds>The upper deck (level +{0}) would stick out of the level above.</MDG_UpperOutOfBounds>
 	<MDG_OrbitDecks>Ship roofs carry a deck in orbit</MDG_OrbitDecks>
 	<MDG_OrbitDecksDesc>As above, So below II normally stops roofs over gravship substructure in orbit from making a rooftop on the level above. Turn this on so gravship decks also work in orbit. Existing orbital maps get their ship rooftops back the next time they load.</MDG_OrbitDecksDesc>
+	<MDG_HomeOnDecks>Upper decks join the home area</MDG_HomeOnDecks>
+	<MDG_HomeOnDecksDesc>When a ship lands, and when a map with a parked ship loads, every upper deck cell above a home-area cell of the main deck is added to the home area. Colonists restricted to Home then also fetch food and work upstairs. Cells are only ever added, never removed.</MDG_HomeOnDecksDesc>
 	<MDG_Verbose>Verbose logging</MDG_Verbose>
 	<MDG_VerboseDesc>Writes launch and landing details (upper deck cells, stowing, stair links) to the log. Turn this on when reporting a problem.</MDG_VerboseDesc>
 </LanguageData>

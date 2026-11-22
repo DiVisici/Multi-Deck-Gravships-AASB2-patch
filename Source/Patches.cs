@@ -790,6 +790,50 @@ namespace MultiDeckGravships
 		}
 	}
 
+	/// <summary>On load, extends the home area onto a parked ship's upper decks (see Deck.ExtendHomeToDecks).</summary>
+	public class MapComponent_DeckHome : MapComponent
+	{
+		public MapComponent_DeckHome(Map map) : base(map)
+		{
+		}
+
+		public override void FinalizeInit()
+		{
+			Map m = map;
+			LongEventHandler.ExecuteWhenFinished(delegate
+			{
+				try
+				{
+					if (!Deck.Ready || m == null || !Find.Maps.Contains(m) || !ModsConfig.OdysseyActive)
+					{
+						return;
+					}
+					ABBandMap bands = Deck.Bands(m);
+					if (bands == null)
+					{
+						return;
+					}
+					foreach (Building_GravEngine engine in m.listerBuildings.AllBuildingsColonistOfClass<Building_GravEngine>())
+					{
+						if (!engine.Spawned)
+						{
+							continue;
+						}
+						int added = Deck.ExtendHomeToDecks(m, bands, bands.BandOf(engine.Position), Deck.ComputeUpper(m, bands.BandOf(engine.Position), engine.ValidSubstructure).Keys);
+						if (added > 0)
+						{
+							MDGLog.Message("added " + added + " upper deck cell(s) of " + engine.RenamableLabel + " to the home area.");
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					MDGLog.Warning("extending the home area onto upper decks failed: " + e.Message);
+				}
+			});
+		}
+	}
+
 	/// <summary>Gives orbital ships their rooftops back on maps saved while AASB2 suppressed them.</summary>
 	public class MapComponent_OrbitDeckResync : MapComponent
 	{

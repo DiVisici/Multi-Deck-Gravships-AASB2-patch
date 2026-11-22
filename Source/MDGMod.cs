@@ -8,11 +8,14 @@ namespace MultiDeckGravships
 	{
 		public bool orbitDecks = true;
 
+		public bool homeOnDecks = true;
+
 		public bool verbose;
 
 		public override void ExposeData()
 		{
 			Scribe_Values.Look(ref orbitDecks, "orbitDecks", true);
+			Scribe_Values.Look(ref homeOnDecks, "homeOnDecks", true);
 			Scribe_Values.Look(ref verbose, "verbose", false);
 		}
 	}
@@ -37,6 +40,7 @@ namespace MultiDeckGravships
 			Listing_Standard l = new Listing_Standard();
 			l.Begin(inRect);
 			l.CheckboxLabeled("MDG_OrbitDecks".Translate(), ref Settings.orbitDecks, "MDG_OrbitDecksDesc".Translate());
+			l.CheckboxLabeled("MDG_HomeOnDecks".Translate(), ref Settings.homeOnDecks, "MDG_HomeOnDecksDesc".Translate());
 			l.CheckboxLabeled("MDG_Verbose".Translate(), ref Settings.verbose, "MDG_VerboseDesc".Translate());
 			l.End();
 		}
